@@ -6,6 +6,7 @@ from copy import copy
 import numpy as np
 import datetime
 
+#load supply data, format: supply_id \t si \t ad_info 
 class Supply:
     def __init__(self, supply_file):
         self.idx = {}
@@ -68,7 +69,7 @@ class Supply:
     def get_supply_sum(self):
         return self.supply_sum
 
-
+#load demand data, format: demand_id \t required_demand \t v_j \t w_j \t lambda_j 
 class Demand:
     def __init__(self, demand_file):
         self.demand = []
@@ -139,6 +140,9 @@ class Demand:
         return self.demand_sum
 
 
+#load edges in bigraph, which is included in supply data, supply format: supply_id \t si \t ad_info 
+#ad_info is the demands and correspanding predict ctr scores can be allocated to this supply node in the bigraph
+#ad_info format: demand_id1,predict_ctr1;demand_id2,predict_ctr2;...
 class Edge:
     def __init__(self, supply_file, demand, supply):
         self.edge = {}
@@ -238,6 +242,7 @@ class AUAF:
         self.demand_click_j = np.zeros((1, demand.get_demand_num()), dtype=np.float64)
         self.demand_allocated_j = np.zeros((1, demand.get_demand_num()), dtype=np.float64)
 
+    #init alpha within a feasible solution, calculate theta_j, and initialize xij and dj(alpha^t)
     def initialize(self):
         self.alpha_j = self.demand.weight_mat + self.demand.lambda_mat * (self.edge.ctr.max(axis=0).reshape((1, self.demand.get_demand_num())))
         self.theta_ij = self.demand.demand_mat / ((self.supply.request_num_mat * self.gamma).sum(axis=0).reshape(1, self.demand.get_demand_num()) + 0.0001)
@@ -269,9 +274,13 @@ class AUAF:
                                   self.theta_ij * (1 + (self.demand.weight_mat + self.demand.lambda_mat * self.edge.ctr - self.alpha_j - self.beta_i)
                                                    / self.demand.v_mat))) * self.gamma
 
+    #calculate beta_i by sovling sum_j(xij)=1 for each supply node i
     def calculate_beta_i(self):
+        #lower bound
         a1 = self.alpha_j - self.demand.lambda_mat * self.edge.ctr - self.demand.weight_mat - self.demand.v_mat
+        #upper bound
         a2 = self.alpha_j - self.demand.lambda_mat * self.edge.ctr - self.demand.weight_mat + self.demand.v_mat * (1.0 / self.theta_ij - 1)
+        #slope
         b = self.theta_ij / self.demand.v_mat
         beta_array = []
         for i in range(self.supply.get_supply_num()):
